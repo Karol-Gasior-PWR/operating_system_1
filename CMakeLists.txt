@@ -8,7 +8,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Główny target aplikacji
 add_executable(os_project_1
     main.cpp
-    karol.h)
+    karol.h
+    threadcounter.h threadcounter.cpp)
 
 # Target testowy dla Catch2
 add_executable(tests test_algorithm.cpp

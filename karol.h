@@ -1,11 +1,22 @@
 #ifndef KAROL_H
 #define KAROL_H
+//=====================================================================================================================
+//=====================================================================================================================
 #include <iostream>
 #include <thread>
 #include <vector>
-
+//---------------------------------------------------------------------------------------------------------------------
+#include "threadcounter.h"
+//=====================================================================================================================
 using namespace std;
 
+//=====================================================================================================================
+/* to do section
+ * - add thread counter
+ * - add sort algorithm, that divides the vec for N equally portions, then executes separ
+ * - licznik jako czesc samego merge do zarzadania ilosca watkow, opcja do wyciagniecia ilosci watkow w wersji debug
+ */
+//=====================================================================================================================
 ostream & operator << (ostream & os, const vector<int> & vec)
 {
     for(auto elem : vec )
@@ -13,26 +24,13 @@ ostream & operator << (ostream & os, const vector<int> & vec)
 
     return os;
 }
-
+//---------------------------------------------------------------------------------------------------------------------
 void wyswietl (int tab[], int b, int e)
 {
     for(auto i=b; i<=e; ++i)
         cout << tab[i] << ", ";
 }
 //=====================================================================================================================
-void helloFunctio(void)
-{
-    cout << "Hello from a function" << endl;
-}
-
-class HelloClass
-{
-public:
-    void operator()() const
-    {
-        cout << "Hello from a function object" << endl;
-    }
-};
 //=====================================================================================================================
 void bubbleSort_asc_right(vector<int> & vec)
 {
@@ -108,15 +106,14 @@ void merge(unsigned int b, unsigned int e, unsigned int m, int tab[])
         }
         ++i;
     }
+    
     //3. coping the rest
-
     while(l < sizeL)
     {
         tab[i] = L[l];
         ++l;
         ++i;
     }
-
     while(r < sizeR)
     {
         tab[i] = R[r];
@@ -128,38 +125,42 @@ void merge(unsigned int b, unsigned int e, unsigned int m, int tab[])
     delete[] L;
     delete[] R;
 }
-
+//---------------------------------------------------------------------------------------------------------------------
 void mergeSort(unsigned int b, unsigned int e, int tab[])
 {
     //check the condition of ending recursion
     if(b >= e)
         return;
     auto m = (e + b) >> 1;
+    
     //divide
     mergeSort(b,m,tab);
     mergeSort(m+1,e,tab);
+    
     //conquer
     merge(b,e,m,tab);
 }
-//=====================================================================================================================
+//---------------------------------------------------------------------------------------------------------------------
 void mergeSortConcurrency(unsigned int b, unsigned int e, int tab[])
 {
     //check the condition of ending recursion
     if(b >= e)
         return;
     auto m = (e + b) >> 1;
+    
     //divide
-    thread one{mergeSort,b,m,tab};
-    thread second{mergeSort,m+1,e,tab};
-    //conquer
-    one.join();
+    thread second{mergeSortConcurrency,b,m,tab};
+    mergeSortConcurrency(m+1,e,tab);
     second.join();
+    
+    //conquer
     merge(b,e,m,tab);
 }
 //=====================================================================================================================
-constexpr unsigned int threshold = 1;
+constexpr unsigned int thresholdAlgorithm = 1;
+constexpr unsigned int thresholdThread = 16;
 
-unsigned int partitionFirst(unsigned int b, unsigned int e, unsigned int pivIdx, int tab[])
+unsigned int partition(unsigned int b, unsigned int e, unsigned int pivIdx, int tab[])
 {
     //check elems, if smaller than pivot, swap with pivot;
     //move the pivot to the the end of local table range
@@ -180,14 +181,14 @@ unsigned int partitionFirst(unsigned int b, unsigned int e, unsigned int pivIdx,
 
     return next;
 }
-
+//---------------------------------------------------------------------------------------------------------------------
 void quickSort(int b, int e, int tab[])
 {
     //validation of the args and table
     if (b >= e)
         return;
     //basic problem condition
-    if(e-b+1 <= threshold) //basic problem
+    if(e-b+1 <= thresholdAlgorithm) //basic problem
     {
         mergeSort(b,e,tab);
         return;
@@ -195,11 +196,17 @@ void quickSort(int b, int e, int tab[])
 
     //divide
     int pivIdx = e;    //here pivIdx should be calculated
-    pivIdx = partitionFirst(b, e, pivIdx, tab);
+    pivIdx = partition(b, e, pivIdx, tab);
     //conquer
     quickSort(b, pivIdx-1, tab);
     quickSort(pivIdx+1, e, tab);
 }
+//---------------------------------------------------------------------------------------------------------------------
+void workerQuickSort()
+{
+    
+}
+
 
 void quickSortConcurrency(unsigned int b, unsigned int e, int tab[])
 {
@@ -207,7 +214,7 @@ void quickSortConcurrency(unsigned int b, unsigned int e, int tab[])
     if (b >= e)
         return;
     //basic problem condition
-    if(e-b+1 <= threshold) //basic problem
+    if(e-b+1 <= thresholdAlgorithm) //basic problem
     {
         mergeSort(b,e,tab);
         return;
@@ -215,24 +222,14 @@ void quickSortConcurrency(unsigned int b, unsigned int e, int tab[])
 
     //divide
     int pivIdx = e;    //here pivIdx should be calculated
-    pivIdx = partitionFirst(b, e, pivIdx, tab);
+    pivIdx = partition(b, e, pivIdx, tab);
+    
     //conquer
-    thread one{quickSort, b, pivIdx-1, tab};
-    thread second{quickSort, pivIdx+1, e, tab};
-    one.join();
+    thread second{quickSortConcurrency, b, pivIdx-1, tab};
+    quickSortConcurrency(pivIdx+1, e, tab);
     second.join();
 }
 //=====================================================================================================================
-
-class TFunc
-{
-public:
-    void operator()(int a, double b)
-    {
-        cout << "Hello from function object a:" << a << ", b: " << b <<endl;
-    }
-};
-
 //=====================================================================================================================
 
 #endif // KAROL_H
