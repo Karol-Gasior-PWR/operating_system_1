@@ -11,7 +11,9 @@ add_executable(os_project_1
     karol.h)
 
 # Target testowy dla Catch2
-add_executable(tests test_algorithm.cpp)
+add_executable(tests test_algorithm.cpp
+    test_utils.h
+    test_utils.cpp)
 
 # Znajdź i dołącz Catch2 (zakładam, że zainstalowane w systemie)
 find_package(Catch2 REQUIRED)
