@@ -12,7 +12,7 @@
 //=====================================================================================================================
 using namespace std;
 //=====================================================================================================================
-constexpr unsigned int tresholdMinSizeNewThread = 25000;
+constexpr unsigned int tresholdMinSizeNewThread = 1;
 constexpr unsigned int thresholdAlgorithm = 1;
 constexpr unsigned int thresholdMaxThreadNumber = 16;
 //=====================================================================================================================
@@ -156,7 +156,7 @@ void mergeSortConcurrency(unsigned int b, unsigned int e, int tab[], std::atomic
     auto m = (e + b) >> 1;
     
     //divide
-    if(e-b+1 < tresholdMinSizeNewThread || thread_counter.load(std::memory_order_relaxed) <= thresholdMaxThreadNumber)    //check if it is reasonable to start a new thread
+    if(e-b+1 < tresholdMinSizeNewThread || thread_counter.load(std::memory_order_relaxed) >= thresholdMaxThreadNumber)    //check if it is reasonable to start a new thread
     {
         mergeSortConcurrency(b, m, tab, thread_counter);
         mergeSortConcurrency(m+1,e,tab, thread_counter);
@@ -183,7 +183,7 @@ void mergeSortMain(unsigned int b,
 {
 
     std::atomic<uint64_t> local_counter{0};               // lokalny licznik na wypadek braku zewnętrznego
-    std::atomic<uint64_t>& counter = counter_ptr ? *counter_ptr : local_counter;
+    std::atomic<uint64_t> & counter = counter_ptr ? *counter_ptr : local_counter;
 
     // Jeśli chcesz zliczać także „wątek-rodzic” rekurencji, odkomentuj:
     // ThreadCounterGuard root(*counter);
@@ -235,12 +235,6 @@ void quickSort(int b, int e, int tab[])
     quickSort(pivIdx+1, e, tab);
 }
 //---------------------------------------------------------------------------------------------------------------------
-void workerQuickSort()
-{
-    
-}
-
-
 void quickSortConcurrency(unsigned int b, unsigned int e, int tab[])
 {
     //validation of the args and table
