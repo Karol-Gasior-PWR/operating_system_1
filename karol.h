@@ -5,16 +5,23 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+#include <future>
+
 //---------------------------------------------------------------------------------------------------------------------
 #include "threadcounter.h"
 //=====================================================================================================================
 using namespace std;
-
+//=====================================================================================================================
+constexpr unsigned int tresholdMinSizeNewThread = 25000;
+constexpr unsigned int thresholdAlgorithm = 1;
+constexpr unsigned int thresholdMaxThreadNumber = 16;
 //=====================================================================================================================
 /* to do section
  * - add thread counter
  * - add sort algorithm, that divides the vec for N equally portions, then executes separ
  * - licznik jako czesc samego merge do zarzadania ilosca watkow, opcja do wyciagniecia ilosci watkow w wersji debug
+ * - dodac namespace, ukryc funkcje
+ * - za duzo watkow / za maly problem -> nie tworz nowych watkow
  */
 //=====================================================================================================================
 ostream & operator << (ostream & os, const vector<int> & vec)
@@ -141,7 +148,7 @@ void mergeSort(unsigned int b, unsigned int e, int tab[])
     merge(b,e,m,tab);
 }
 //---------------------------------------------------------------------------------------------------------------------
-void mergeSortConcurrency(unsigned int b, unsigned int e, int tab[])
+void mergeSortConcurrency(unsigned int b, unsigned int e, int tab[], std::atomic<T> & thread_counter)
 {
     //check the condition of ending recursion
     if(b >= e)
@@ -149,16 +156,42 @@ void mergeSortConcurrency(unsigned int b, unsigned int e, int tab[])
     auto m = (e + b) >> 1;
     
     //divide
-    thread second{mergeSortConcurrency,b,m,tab};
-    mergeSortConcurrency(m+1,e,tab);
-    second.join();
+    if(e-b+1 < tresholdMinSizeNewThread || thread_counter.load(std::memory_order_relaxed) <= thresholdMaxThreadNumber)    //check if it is reasonable to start a new thread
+    {
+        mergeSortConcurrency(b, m, tab, thread_counter);
+        mergeSortConcurrency(m+1,e,tab, thread_counter);
+    }
+    else
+    {
+        thread second([=, &thread_counter] () -> void {
+            ThreadCounter counter{thread_counter};
+            mergeSortConcurrency(b, m, tab, thread_counter);
+        });
+        mergeSortConcurrency(m+1,e,tab, thread_counter);
+        second.join();
+    }
+
     
     //conquer
     merge(b,e,m,tab);
 }
+//---------------------------------------------------------------------------------------------------------------------
+void mergeSortMain(unsigned int b,
+                   unsigned int e,
+                   int tab[],
+                   atomic<T> * counter_ptr = nullptr)
+{
+
+    std::atomic<uint64_t> local_counter{0};               // lokalny licznik na wypadek braku zewnętrznego
+    std::atomic<uint64_t>& counter = counter_ptr ? *counter_ptr : local_counter;
+
+    // Jeśli chcesz zliczać także „wątek-rodzic” rekurencji, odkomentuj:
+    // ThreadCounterGuard root(*counter);
+
+    mergeSortConcurrency(b, e, tab, counter);
+}
 //=====================================================================================================================
-constexpr unsigned int thresholdAlgorithm = 1;
-constexpr unsigned int thresholdThread = 16;
+
 
 unsigned int partition(unsigned int b, unsigned int e, unsigned int pivIdx, int tab[])
 {
@@ -231,5 +264,9 @@ void quickSortConcurrency(unsigned int b, unsigned int e, int tab[])
 }
 //=====================================================================================================================
 //=====================================================================================================================
+
+
+
+
 
 #endif // KAROL_H
