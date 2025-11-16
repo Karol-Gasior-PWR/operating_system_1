@@ -1,6 +1,7 @@
 #include <iostream>
 #include <random>
 #include "karol.h"
+#include "timer.h"
 
 using namespace std;
 
@@ -22,30 +23,54 @@ std::vector<int> make_int_vector(int min_val, int max_val, std::size_t count) {
 
 int main()
 {
+    //depth i size jest po to, aby nie blokować slotów na wątki dla małych podtablic
+    auto depth = 12;
+    auto size = 1000;
+    auto liczba_watkow = 16;
 
-
-    cout << std::thread::hardware_concurrency() << endl;
-
-
-    atomic<T> counter{};
-    atomic<bool> running = true;
-
-    vector<int> v1{1,2,3,8,1,2,3,5,6,9,8,7,6,0,0,0,-1,10,-5,-4,-3,-1,-2,-3,1,6,6};
-
-    auto v = make_int_vector(-100,100, 100'000'000);
+    Timer t{};
+    auto v = make_int_vector(-100,100, 1'000'000);
     cout << "End of generation" << endl;
 
-    thread worker{ [& counter, &v, &running] ()->void
-        {
-            mergeSortMain(0,v.size()-1,v.data(),&counter);
-            running.store(false);
-    }};
+    counting_semaphore<semaphore_max>sem{liczba_watkow};
 
-    while (running.load())
+
+    cout << liczba_watkow << endl;
+
+    for(int i=0; i<25; ++i)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        cout << counter.load() << endl;
-    }
+        auto copy_v = v;
+        t.start();
+        //quickSort_simple_main(0,v.size()-1,v.data());
+        //quickSort(0,v.size()-1,v.data());
+        quickSort_depth(0,copy_v.size()-1,copy_v.data(),depth, sem);
+        //quickSort_size(0,v.size()-1,v.data(),size, sem);
 
-    worker.join();
+
+
+        t.stop();
+        cout << t.get_miliseconds() << ", " << endl; ;
+        t.reset();
+    }
+    cout << endl;
+
+    /*
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+*/
 }

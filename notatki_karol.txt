@@ -1,0 +1,32 @@
+Problemy ()
+
+TOCTOU(Time of Check to Time of Use)
+
+
+if (thread_counter.load(std::memory_order_relaxed) < MAX_THREADS) {
+    thread_counter.fetch_add(1, std::memory_order_relaxed);
+    // tworzymy nowy wątek
+}
+W takim przypadku, między sprawdzeniem zawartości thread_counter a jej inkrementacją może dojść do jego sprawdzenia w innych wątkach a w efekcie wejście do wnętrz instrukcji if w wielu wątkach. Następnie w każdym z tych wątków następuje inkrementacja thread_counter, co może doprowadzić do sytuacji, żę thread_counter > MAX_THREADS. Czyli ograniczenie liczby watków nie będzie działać prawidłowo.
+
+Rozwiązaniem tego problemu jest użycie <semaphore> (c++20) lub wzorca projektowego CAS-loop (compare and swap)
+
+auto old = thread_counter.load();
+while(old < MAX_THREADS)
+{
+	if (thread_counter.compare_exchange_weak (old, old+1))
+		//stworz watek i wyjdz
+		
+}
+instrukcja compare_exchange_weak jest atomowa instukcja CPU nazywana cas, ponieważ jeżeli sprawdzenie niepowiedzie się, zawartość old jest aktualizowana. 
+
+Jeszcze lepszym rozwiazaniem jest uzycie std::semaphore
+Odzwierciedleniem powyższego kodu czyli blokujące tworzenie wątku wymaga użycia std::counting_semaphor.acquire(). Instrukcja ta sprawdza czy zawartośc semaphore jest większa od 0, jeśli nie, wątek jest usypiany. Po zakończeniu wykonywania wątku należy uzyć std::counting_semaphor.release() aby zwiększyć wartośc przetezymywana przez semaphore. Acquire i release nie muszą zwiększać i zmniejszać wartości o 1, mogą przyjac większe dodatnie wartości. 
+
+Takie podejście w przypadku rekurencyjnego wywołania kolejnych wątków może spowodować deadlock, mamy n czekających watków, gdzie n to wartość podana do semaphore podczas jego tworzenia. Dlatego w implemntacji współbieżenej algorytmu QuickSort zamiast acquire zastosowano std::counting_semaphor.try_acquire() które zwraca wartość true i oraz zwiększa wartość, jeżeli zawartość większa od 0, oraz false dla 0. W przeciwiństwie do acquire() bierzący wątek nie jest usypiany. 
+
+
+
+ulimit -u - instrukcja w linux sprawdzająca maksymalną ilość procesów/wątków którą można utworzyć w systemie, przekroczenie tej liczby rzuci w c++ wyjątek :
+
+ulimit -s -maksymalny rozmiar stack w kB, jest on przydzielany każdemu wątkowi oddzielnie. 

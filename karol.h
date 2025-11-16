@@ -6,6 +6,7 @@
 #include <thread>
 #include <vector>
 #include <future>
+#include <semaphore>
 
 //---------------------------------------------------------------------------------------------------------------------
 #include "threadcounter.h"
@@ -15,6 +16,7 @@ using namespace std;
 constexpr unsigned int tresholdMinSizeNewThread = 1;
 constexpr unsigned int thresholdAlgorithm = 1;
 constexpr unsigned int thresholdMaxThreadNumber = 16;
+constexpr unsigned int semaphore_max = 1000; //niestety ta wartosc musi byc constexpr, max wartosc licznika
 //=====================================================================================================================
 /* to do section
  * - add thread counter
@@ -185,9 +187,6 @@ void mergeSortMain(unsigned int b,
     std::atomic<uint64_t> local_counter{0};               // lokalny licznik na wypadek braku zewnętrznego
     std::atomic<uint64_t> & counter = counter_ptr ? *counter_ptr : local_counter;
 
-    // Jeśli chcesz zliczać także „wątek-rodzic” rekurencji, odkomentuj:
-    // ThreadCounterGuard root(*counter);
-
     mergeSortConcurrency(b, e, tab, counter);
 }
 //=====================================================================================================================
@@ -235,32 +234,163 @@ void quickSort(int b, int e, int tab[])
     quickSort(pivIdx+1, e, tab);
 }
 //---------------------------------------------------------------------------------------------------------------------
-void quickSortConcurrency(unsigned int b, unsigned int e, int tab[])
+bool is_tab_valid(int b, int e, int * tab)
 {
     //validation of the args and table
     if (b >= e)
-        return;
+        return false;
     //basic problem condition
     if(e-b+1 <= thresholdAlgorithm) //basic problem
     {
         mergeSort(b,e,tab);
-        return;
+        return false;
     }
+    return true;
+}
+//---------------------------------------------------------------------------------------------------------------------
+bool cas_loop(std::atomic<uint64_t> & counter)
+{
+    auto current_thread_number = counter.load(std::memory_order_relaxed);
+    while (current_thread_number < thresholdMaxThreadNumber) {
+        // próbujemy zamienić cur -> cur+1 *pod warunkiem*, że nadal jest cur
+        if (counter.compare_exchange_weak(
+                current_thread_number, current_thread_number + 1,
+                std::memory_order_relaxed,
+                std::memory_order_relaxed)) {
+            return true; // udało się zarezerwować slot
+        }
+        //pętla spróbuje ponownie z aktualnym stanem, pod warunkiem, że
+    }
+    return false; // ktoś inny zapełnił wszystkie sloty
+}
+//---------------------------------------------------------------------------------------------------------------------
+void quickSort_simple(unsigned int b, unsigned int e, int tab[], std::atomic<uint64_t> & counter)
+{
+    if(! is_tab_valid(b,e,tab))
+        return;
 
     //divide
     int pivIdx = e;    //here pivIdx should be calculated
     pivIdx = partition(b, e, pivIdx, tab);
     
+    if (cas_loop(counter))
+    {
+        std::thread second{quickSort_simple, b, pivIdx-1, tab, std::ref(counter) };
+        quickSort_simple(pivIdx+1, e, tab, counter);
+        second.join();
+    }
+    else
+    {
+        quickSort_simple(b, pivIdx-1, tab, counter);
+        quickSort_simple(pivIdx+1, e, tab, counter);
+    }
     //conquer
-    thread second{quickSortConcurrency, b, pivIdx-1, tab};
-    quickSortConcurrency(pivIdx+1, e, tab);
-    second.join();
+
+}
+//-----------------------------------------------------------------------------------------------------------------------
+void quickSort_simple_main(unsigned int b,
+                   unsigned int e,
+                   int tab[],
+                   atomic<T> * counter_ptr = nullptr)
+{
+
+    std::atomic<uint64_t> local_counter{0};               // lokalny licznik na wypadek braku zewnętrznego
+    std::atomic<uint64_t> & counter = counter_ptr ? * counter_ptr : local_counter;
+
+    quickSort_simple(b, e, tab, counter);
 }
 //=====================================================================================================================
+void quickSort_depth(unsigned int b, unsigned int e, int tab[], unsigned int depth, std::counting_semaphore<semaphore_max> & thread_slots)
+{
+    if(! is_tab_valid(b,e,tab))
+        return;
+
+    //divide
+    int pivIdx = e;    //here pivIdx should be calculated
+    pivIdx = partition(b, e, pivIdx, tab);
+
+    if(depth == 0) //osiagnieto max glebokosc, od tego momenty sekwencyjnie
+    {
+        quickSort(b, pivIdx-1, tab);
+        quickSort(pivIdx+1, e, tab);
+    }
+    else
+    {
+        if(thread_slots.try_acquire()) //zdobadz slot na watek
+        {
+            std::thread second{ [b, pivIdx, tab, depth, &thread_slots]()
+                {
+
+                    quickSort_depth(b, pivIdx - 1, tab, depth - 1, thread_slots);
+                    thread_slots.release(); //zwolnij slot
+                }
+            };
+            quickSort_depth(pivIdx + 1, e, tab, depth - 1, thread_slots);
+            second.join();
+        }
+        else
+        {
+            quickSort_depth(b, pivIdx - 1, tab, depth - 1, thread_slots);
+            quickSort_depth(pivIdx + 1, e, tab, depth - 1, thread_slots);
+        }
+
+    }
+}
+//-----------------------------------------------------------------------------------------------------------------------
+void quickSort_depth_main(unsigned int b,
+                           unsigned int e,
+                           int tab[],
+                           unsigned int max_depth = 5,
+                           counting_semaphore<semaphore_max> * counter = nullptr)
+{
+
+    counting_semaphore<semaphore_max> local_counter{thread::hardware_concurrency()}; // lokalny licznik na wypadek braku zewnętrznego
+    counting_semaphore<semaphore_max> & semaphore = counter ? (* counter) : local_counter;
+
+    semaphore.acquire();
+    quickSort_depth(b, e, tab, max_depth, semaphore);
+    semaphore.release();
+}
 //=====================================================================================================================
+void quickSort_size(unsigned int b, unsigned int e, int tab[], unsigned int max_size, std::counting_semaphore<semaphore_max> & thread_slots)
+{
+    if(! is_tab_valid(b,e,tab))
+        return;
 
+    //divide
+    int pivIdx = e;    //here pivIdx should be calculated
+    pivIdx = partition(b, e, pivIdx, tab);
 
+    auto size = e-b;
 
+    if(size < max_size) //jesli tak kontynuuj sekwencyjnie
+    {
+        quickSort(b, pivIdx - 1, tab);
+        quickSort(pivIdx + 1, e, tab);
+    }
+    else
+    {
+        if(thread_slots.try_acquire()) //zdobadz slot na watek
+        {
+            std::thread second{ [b, pivIdx, tab, max_size, & thread_slots]()
+                {
+                    quickSort_size(b, pivIdx - 1, tab, max_size, thread_slots);
 
+                    thread_slots.release(); //zwolnij slot
+                }
 
+            };
+            quickSort_size(pivIdx + 1, e, tab, max_size, thread_slots);
+            second.join();
+        }
+        else
+        {
+            quickSort_size(b, pivIdx - 1, tab, max_size, thread_slots);
+            quickSort_size(pivIdx + 1, e, tab, max_size, thread_slots);
+        }
+
+    }
+
+}
+//-----------------------------------------------------------------------------------------------------------------------
 #endif // KAROL_H

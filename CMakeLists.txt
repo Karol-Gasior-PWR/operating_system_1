@@ -2,14 +2,15 @@ cmake_minimum_required(VERSION 3.16)
 
 project(os_project_1 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Główny target aplikacji
 add_executable(os_project_1
     main.cpp
     karol.h
-    threadcounter.h threadcounter.cpp)
+    threadcounter.h threadcounter.cpp
+    timer.h timer.cpp)
 
 # Target testowy dla Catch2
 add_executable(tests test_algorithm.cpp
