@@ -33,7 +33,15 @@ long long Timer::get_miliseconds()
 
     return duration_cast<milliseconds>(total).count();
 }
+long long Timer::get_nanoseconds()
+{
 
+    auto total = elapsed_;              // duration<double> w sekundach
+    if (running_)
+        total += Clock::now() - start_point_;
+
+    return duration_cast<nanoseconds>(total).count();
+}
 void Timer::reset()
 {
     running_ = false;

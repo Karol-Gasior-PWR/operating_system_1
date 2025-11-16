@@ -13,6 +13,7 @@ public:
     void start();
     void stop();
     long long get_miliseconds();
+    long long get_nanoseconds();
     void reset();
 private:
     bool running_;

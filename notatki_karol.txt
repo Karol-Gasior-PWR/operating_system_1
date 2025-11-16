@@ -103,6 +103,6 @@ Proste ograniczenie liczby wątków napotyka następujące problemy, które czę
 
 Należy pamiętać, że badania nie były wykonywane na izolowanym CPU, więc wyniki są uśrednioniem z wielu sortowań tej samej tablicy elemntów. System wykonuje również inne zadania w tle i nie zawsze przydziela rdzenie wyłącznie dla wątków powiązanych z opisywanym programem.
 
-Jeśli są wyniki dla simple quick sort, to przez udostępnianego przez niego atomika można zrobić wykres aktiv_thread/max_threads w funkcji czasu.
+Jeśli są wyniki dla simple quick sort, to przez udostępnianego przez niego atomika można zrobić wykres aktiv_thread/max_threads w funkcji czasu.dotyczy ile watkow tworzy sam program, a nie ile jest aktualnie wykonywanych.
 
 
